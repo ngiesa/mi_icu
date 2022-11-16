@@ -5,47 +5,85 @@ import numpy as np
 import pandas as pd
 from data_load import load_data
 from desc_stats import plot_miss_patterns
+from pandas.core.frame import DataFrame
 
 # cutting sequences on same length if needed
-def cut_seq_lengths(df=None, time_steps=24):
-    return df.groupby(['case_id', 'seq_no']).head(time_steps).reset_index(drop=True)
+def cut_seq_lengths(df: DataFrame = None, time_steps: int = 24, gr_columns: list = ['case_id', 'seq_no']):
+    '''
+    Selects the first n (time_steps) rows within a group 
+            Parameters:
+                    df (DataFrame): A time variant df with grouping and value columns
+                    time_steps (int): First n rows which are selected within groups
+                    gr_columns (list): Column names for group by condition
+
+            Returns:
+                    df (DataFrame): Df with first n (time_steps) per group
+    '''
+    return df.groupby([gr_columns]).head(time_steps).reset_index(drop=True)
 
 # drop random values from df to simulate MCAR missingness is evenly distributed, can be different
-def induce_mcar(df = None, miss_fraction = 0.1):
-    dfs = []
-    for v in time_vars:
-        dfs.append(shuffle(df[["case_id","timestamp", "seq_no", "age", v]]).sample(frac = 1 - miss_fraction))
-    df_join = reduce(lambda df1, df2: df1.merge(df2, on=["case_id", "timestamp", "seq_no", "age"], how = "outer"), dfs).drop_duplicates()
-    return df[["case_id","timestamp", "seq_no", "age"]].merge(df_join, on=["case_id", "timestamp", "seq_no", "age"], how = "left")
+def induce_mcar(df: DataFrame = None, miss_prop: float = 0.1, time_colums: list = [], static_columns: list = []):
+    '''
+    Induces MCAR pattern for time variant variables under missing probability
+            Parameters:
+                    df (DataFrame): A time variant df with time related variables
+                    miss_prop (float): Probability for each value v being missing 
+                    time_colums (list): Column names for time related variables
+                    static_coluns (list): Column names for static variables 
+            Returns:
+                    df (DataFrame): Df with MCAR pattern
+    '''
+    # drawing 1 - miss_prop values as subsample per variable 
+    dfs = [shuffle(df[static_columns + [v]]).sample(frac = 1 - miss_prop) for v in time_colums]
+    # joining subsampled values per variable back to one df and return result
+    df_join = reduce(lambda df1, df2: df1.merge(df2, on=static_columns, how = "outer"), dfs).drop_duplicates()
+    return df[static_columns].merge(df_join, on=static_columns, how = "left")
 
 # drop random values conditionally on one dependent variable per case
-def induce_mar(df = None, cond_var = "age", s_range = [0.1, 0.9]):
-    df_gr = df.groupby("case_id")[cond_var].median().reset_index()
-    # asssign missing rate to cases normalized with norm distr added
+def induce_mar(df: DataFrame = None, cond_var: str = "age", miss_range: list = [0.1, 0.9], 
+                identifier: str = "case_id", static_columns: list = []):
+    '''
+    Induces MAR pattern for time variant variables with range of missing probabilities under a conditioning (dependent) variable
+    The direction of missing probabilities is positive (increases when dependent variable increases)
+            Parameters:
+                    df (DataFrame): A time variant df with time related variables
+                    cond_var (float): The dependent variable for inducing missingness
+                    time_colums (list): Column names for time related variables
+                    miss_range (list): Range of missing probabilities
+                    identifier (str): Identifier of a case / patient / sequence
+                    static_columns (list): Column names for group by condition being static
+            Returns:
+                    df (DataFrame): Df with MAR pattern
+    '''
+    # group by identifier and get medians per group for conditioning 
+    df_gr = df.groupby(identifier)[cond_var].median().reset_index()
+    # asssign values of cond var to tmp var
     miss_fractions =  df_gr[cond_var]
-    # normalization between [s_min : s_max]
-    s_min, s_max = s_range[0], s_range[1]
+    # normalization of cond values between [s_min : s_max]
+    s_min, s_max = miss_range[0], miss_range[1]
     miss_fractions = (miss_fractions - min(miss_fractions))/ \
         (max(miss_fractions) - min(miss_fractions)) * (s_max - s_min) + s_min
     df_gr = df_gr.assign(miss_fraction = miss_fractions)
     # merge missing rates to actual values 
-    df = df.merge(df_gr[["case_id", "miss_fraction"]], on=["case_id"])
-    # going through variables and cases on conditioning on dependent variable
+    df = df.merge(df_gr[[identifier] + ["miss_fraction"]], on=identifier)
+    # going through variables and cases and conditioning on dependent variable
     df_vars = []
     for time_v in time_vars:
         dfs_cases = []
         for i, row in df_gr.iterrows():
             miss_fraction = row["miss_fraction"]
-            dfs_cases.append(df[(df.case_id == row["case_id"])] \
-                [["case_id","timestamp","seq_no","age", time_v]].sample(frac = 1 - miss_fraction))
+            dfs_cases.append(df[(df.case_id == row[identifier])] \
+                [[static_columns, time_v]].sample(frac = 1 - miss_fraction))
         df_vars.append(pd.concat(dfs_cases))
     # outerjoining results containing missingness per variable to one dataframe
-    df_join = reduce(lambda df1, df2: df1.merge(df2, on=["case_id", "timestamp", "seq_no", "age"], how = "outer"), df_vars).drop_duplicates()
-    return df[["case_id","timestamp", "seq_no", "age"]].merge(df_join, on=["case_id", "timestamp", "seq_no", "age"], how = "left")
+    df_join = reduce(lambda df1, df2: df1.merge(df2, on=static_columns, how = "outer"), df_vars).drop_duplicates()
+    return df[static_columns].merge(df_join, on=static_columns, how = "left")
 
+# usage of defined functions 
 def induce_and_plot():
     df = load_data()
-    df_mcar = induce_mcar(df)
-    df_mar = induce_mar(df)
+    df_mcar = induce_mcar(df = df, time_colums= time_vars, static_columns=["case_id","timestamp", "seq_no", "age"])
+    df_mar = induce_mar(df=df, cond_var = "age", miss_range = [0.1, 0.9], 
+                identifier = "case_id", static_columns = ["case_id", "timestamp", "seq_no", "age"])
     plot_miss_patterns(df=df, df_mar=df_mar, df_mcar=df_mcar)
 
