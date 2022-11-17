@@ -81,6 +81,17 @@ def induce_mar(df: DataFrame = None, cond_var: str = "age", miss_range: list = [
 
 # apply missingness depending on the acutal value of one feature / high value = high missingness in a range 
 def induce_mnar(df: DataFrame = None, static_columns:list = [], time_colums:list = [], miss_range: list = [0.1, 0.9]):
+        '''
+        Induces MNAR pattern for time variant variables with range of missing probabilities positievly linear scaled to actual values
+        The direction of missing probabilities is positive (increases misssingness if variable value increases)
+                Parameters:
+                        df (DataFrame): A time variant df with time related variables
+                        static_columns (list): Column names for group by condition being static
+                        time_colums (list): Column names for time related variables
+                        miss_range (list): Range of missing probabilities
+                Returns:
+                        df (DataFrame): Df with MNAR pattern
+        '''
         s_min, s_max, df_per_var = miss_range[0], miss_range[1], []
         # get min max information for time related vars and store into df
         min_max = df.describe().loc[["min", "max"], time_colums]
