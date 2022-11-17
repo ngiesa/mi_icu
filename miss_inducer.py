@@ -72,12 +72,38 @@ def induce_mar(df: DataFrame = None, cond_var: str = "age", miss_range: list = [
         dfs_cases = []
         for i, row in df_gr.iterrows():
             miss_fraction = row["miss_fraction"]
-            dfs_cases.append(df[(df.case_id == row[identifier])] \
-                [[static_columns, time_v]].sample(frac = 1 - miss_fraction))
+            dfs_cases.append(df[df.case_id == row[identifier]] \
+                [static_columns + [time_v]].sample(frac = 1 - miss_fraction))
         df_vars.append(pd.concat(dfs_cases))
     # outerjoining results containing missingness per variable to one dataframe
     df_join = reduce(lambda df1, df2: df1.merge(df2, on=static_columns, how = "outer"), df_vars).drop_duplicates()
     return df[static_columns].merge(df_join, on=static_columns, how = "left")
+
+# apply missingness depending on the acutal value of one feature / high value = high missingness in a range 
+def induce_mnar(df: DataFrame = None, static_columns:list = [], time_colums:list = [], miss_range: list = [0.1, 0.9]):
+        s_min, s_max, df_per_var = miss_range[0], miss_range[1], []
+        # get min max information for time related vars and store into df
+        min_max = df.describe().loc[["min", "max"], time_colums]
+        # get missing rates normalized in range and dependent on value levels of variables
+        missing_rates_per_var = (df[time_colums] - min_max.loc[:, time_colums].loc["min"])/ \
+                                (min_max.loc[:, time_colums].loc["max"] - \
+                                min_max.loc[:, time_colums].loc["min"]) * (s_max - s_min) + s_min
+        # go through each variable and levels to induce MNAR
+        for var in time_colums:
+                # getting missing rates and counts per feature level 
+                miss_val = pd.concat([df[var].to_frame("value"), 
+                                missing_rates_per_var[var].to_frame("miss")], axis=1)\
+                                .value_counts().reset_index()
+                # reducing to levels occuring at least 10 times (otherwise subsampling may not be sufficient)
+                miss_val, ds = miss_val[miss_val[0] > 10], []
+                # going through feature levels and inducing missingness per level
+                for i, row in miss_val.iterrows():
+                        d = df[static_columns + [var]]
+                        ds.append(d[d[var] == row.value].sample(frac=1-row.miss))
+                df_per_var.append(pd.concat(ds))
+        # merging dfs per variable outer for preserving missing columns
+        df_join = reduce(lambda df1, df2: df1.merge(df2, on=static_columns, how = "outer"), df_per_var).drop_duplicates()
+        return df[static_columns].merge(df_join, on=static_columns, how = "left")
 
 # usage of defined functions 
 def induce_and_plot():
@@ -85,5 +111,7 @@ def induce_and_plot():
     df_mcar = induce_mcar(df = df, time_colums= time_vars, static_columns=["case_id","timestamp", "seq_no", "age"])
     df_mar = induce_mar(df=df, cond_var = "age", miss_range = [0.1, 0.9], 
                 identifier = "case_id", static_columns = ["case_id", "timestamp", "seq_no", "age"])
-    plot_miss_patterns(df=df, df_mar=df_mar, df_mcar=df_mcar)
+    df_mnar = induce_mnar(df=df, static_columns=["case_id", "timestamp", "seq_no", "age"], time_colums=time_vars)
+    plot_miss_patterns(df=df, df_mar=df_mar, df_mcar=df_mcar, df_mnar = df_mnar)
 
+induce_and_plot()
