@@ -9,7 +9,7 @@ def calc_error(df_gt: DataFrame = None, df_imp: DataFrame = None, time_vars: lis
                     df_imp (DataFrame): Imputed dataframe 
                     time_vars (list): Column names for imp variables
                     metric (metric): (Sklearn) Metric to calculate the error
-                    df_miss (DataFrame): df with miss pattenr, if specified just include imputed vales
+                    df_miss (DataFrame): df with miss pattenr, if not None just include imputed vales
 
             Returns:
                     df (DataFrame): Df with error per variable
