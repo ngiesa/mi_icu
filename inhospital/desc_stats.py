@@ -1,8 +1,10 @@
 import pandas as pd
 import seaborn as sns
 import math
+import numpy as np
+import scipy
 from matplotlib import pyplot as plt
-from conf_vars import variables, drop_cols, time_vars, var_ranges
+from conf_vars import variables, drop_cols, time_vars, var_ranges, error_functions
 from pandas.core.frame import DataFrame
 
 def plot_distr(df, name = "distr_values"):
@@ -69,3 +71,32 @@ def plot_miss_patterns_fractions(df_dict, name="miss_pattern_miss"):
                 axs[i%3][int(i/rows)].legend()
         f.tight_layout(pad=4)
         f.savefig("./{}_pat_{}.png".format(name, k))
+
+
+def mean_confidence_interval(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return np.round(m, 3), np.round(m-h, 3), np.round(m+h, 3)
+
+def calc_sum_columns(df: DataFrame = None, val_cols = [], gr_cols = []):
+    df_res = df.assign(sum_error = df[time_vars].sum(axis=1))
+    return df_res
+
+
+def plot_error_bars(ci_raw_path: str = "./res_ci_raw_data.csv"):
+    df = pd.read_csv(ci_raw_path, index_col=0)
+    vars = time_vars + ["sum_error"]
+    rows = (math.ceil(len(vars)/2))
+    for metric in error_functions.keys():
+        f, axs = plt.subplots((rows), 2, figsize=(20, rows*4))
+        df_plot = df[df.metric == metric]
+        for i, v in enumerate(vars):
+            sns.barplot(data=df_plot, x="missing_pattern", y=v, hue="imputation_method", ax=axs[i%rows][int(i/rows)])
+            if i == 0:
+                axs[0][0].legend()
+            else:
+                axs[i%rows][int(i/rows)].get_legend().remove()
+        f.tight_layout()
+        f.savefig("./error_bars_{}.png".format(metric))

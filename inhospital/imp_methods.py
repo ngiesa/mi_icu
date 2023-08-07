@@ -1,6 +1,4 @@
-from conf_vars import time_vars
-
-def impute_ffil(df_in  = None, group_cols = ["case_id"], time_vars = time_vars):
+def impute_ffil(df_in  = None, group_cols = ["case_id"], time_vars = []):
     df = df_in.copy()
     # describe to get summary stats
     stats = df.describe().reset_index()
@@ -10,7 +8,7 @@ def impute_ffil(df_in  = None, group_cols = ["case_id"], time_vars = time_vars):
         transform(lambda x: x.ffill())[time_vars].fillna(medi_fill).fillna(0)
     return df
 
-def impute_median(df_in  = None, time_vars = time_vars):
+def impute_median(df_in  = None, time_vars = []):
     df = df_in.copy()
     # describe to get summary stats
     stats = df.describe().reset_index()

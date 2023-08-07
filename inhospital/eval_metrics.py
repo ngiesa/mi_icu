@@ -20,5 +20,5 @@ def calc_error(df_gt: DataFrame = None, df_imp: DataFrame = None, time_vars: lis
                         for v in time_vars]
     else:
         error = [metric(df_gt[v], df_imp[v]) for v in time_vars]
-    return pd.DataFrame({"variable": time_vars, "error": error})
+    return {"variable": time_vars, "error": error}
     
