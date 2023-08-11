@@ -23,7 +23,7 @@ class DataLoader():
 
         return data_meas.reset_index(), data_demo.reset_index()
     
-    def resample_data(self, interval_h: int = 4, features: list = [], patient_id:str = "subject_id"):
+    def resample_data(self, interval_h: int = 4, features: list = [], patient_id:str = "subject_id", drop_na:bool=True):
         '''
         resamples hourly dataset by sampling interval in h, selects features, and drops all patients with any NaN
 
@@ -37,13 +37,16 @@ class DataLoader():
         '''
         data=self.data_meas
         # selection of features with patient id
-        data = data.loc[:, features + [patient_id], ]
+        data = data.loc[:, features + [patient_id] ]
         # setting interval index for groups 
         data['{}h_index'.format(str(interval_h))] = data.groupby([patient_id]).cumcount()//interval_h
         # resample values with mean and keeping outliers 
         data = data.groupby([patient_id, '{}h_index'.format(str(interval_h))]).mean().reset_index()
+        if not drop_na:
+            return data
         # dropping all patients with any NaN in any feature per time index group
-        return data.groupby(patient_id).filter(lambda x: x.notna().all().all())
+        data = data.groupby(patient_id).filter(lambda x: x.notna().all().all())
+        return data
     
 
     def apply_conf_items(self):
@@ -56,7 +59,6 @@ class DataLoader():
                                         features=config["features"], 
                                         patient_id=config["patient_id"]
                                     )
-            self.conf_items[item]["data"].to_csv("./dataset_{}.csv".format(item.replace(" ", "_")))
+            self.conf_items[item]["data"].to_csv("./data/dataset_{}.csv".format(item.replace(" ", "_")))
             self.conf_items[item]["n_subjects"] = len(self.conf_items[item]["data"][config["patient_id"]].unique())
         return self.conf_items
-

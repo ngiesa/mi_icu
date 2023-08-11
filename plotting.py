@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import random
 
+sns.set_theme(style="whitegrid")
+
 from data_loader import DataLoader
 
 def plot_frequency_lens(data_loader: DataLoader = None):
@@ -17,19 +19,19 @@ def plot_frequency_lens(data_loader: DataLoader = None):
     dfs_plotified = [(conf_items[item]["data"].groupby(conf_items[item]["patient_id"])\
         ['{}h_index'.format(str(conf_items[item]["sampling_interval"]))]\
             .count() * conf_items[item]["sampling_interval"])\
-                .reset_index(name="seq_lens").assign(hourly_sampling=str(conf_items[item]["sampling_interval"])) for item in conf_items.keys()] + \
-                    [data_meas.groupby("subject_id").hours_in.count().reset_index(name="seq_lens").assign(hourly_sampling=str(1))]
+                .reset_index(name="seq_lens").assign(sampling=str(conf_items[item]["sampling_interval"]) + "h") for item in conf_items.keys()] + \
+                    [data_meas.groupby("subject_id").hours_in.count().reset_index(name="seq_lens").assign(sampling=str(1) + "h")]
 
     df_plot = pd.concat(dfs_plotified).reset_index()
-
-    fig = plt.figure(constrained_layout=True, figsize=(12, 2 * len(df_plot.sampling.unique())))
-    subf = fig.subfigures(2,1)
-    ax1, ax2 = subf[0].subplots(1,1), subf[1].subplots(1,1)
+    fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    ax1, ax2 = axs[0], axs[1]
     my_pal, rand_color = {}, random.sample(list(mcolors.TABLEAU_COLORS.keys()), k=len(df_plot.sampling.unique()))
     for i, sampl in enumerate(df_plot.sampling.unique()):
         my_pal[sampl] = rand_color[i]
-    sns.histplot(data=df_plot.sort_values("hourly_sampling", ascending=True),  x="seq_lens", ax=ax1, hue="hourly_sampling", palette=my_pal, bins=100)
-    sns.boxplot(data=df_plot.sort_values("hourly_sampling", ascending=False),  xs="seq_lens", ax=ax2,  y="hourly_sampling", palette=my_pal)
+
+    sns.histplot(data=df_plot.sort_values("sampling", ascending=False),  x="seq_lens", ax=ax1, hue="sampling",bins=100, palette=my_pal)
+    sns.boxplot(data=df_plot.sort_values("sampling", ascending=False), x="seq_lens", y="sampling", ax=ax2, palette=my_pal)
+
     fig.savefig("./sequence_lengths.png", dpi=320)
 
 def plot_missing_rates_heatmap(data_loader: DataLoader = None, sampling_intervals: list =[]):
@@ -53,12 +55,12 @@ def plot_missing_rates_heatmap(data_loader: DataLoader = None, sampling_interval
         else:
             df_plot = df_plot.merge(df_sampl)
 
-    df_plot = df_plot.sort_values(by="sampling_{}h".format(interv))\
+    df_plot = df_plot.sort_values(by="sampling_1h")\
         .reset_index().drop(columns=["index"])
     
     df_plot.to_csv("./missing_rates.csv")
 
-    fig, ax = plt.subplots(figsize=(30, i*2)) # TODO
+    fig, ax = plt.subplots(figsize=(30, i*2))
     sns.heatmap(df_plot.drop(columns="LEVEL2").T, ax=ax, cbar_kws={"shrink": 0.7})
 
     # store figure
@@ -66,3 +68,24 @@ def plot_missing_rates_heatmap(data_loader: DataLoader = None, sampling_interval
 
 
 
+# scatterplot with number of feats, sampling interval and number of patients 
+def plot_scatter_feat_combo():
+
+    f, ax = plt.subplots(1,1,figsize=(12, 8))
+
+    df_combo_sets = pd.read_csv("./combo_miss_rate_feats.csv", index_col=0)
+
+    cmap = sns.cubehelix_palette(rot=-.2, as_cmap=True)
+    f = sns.relplot(
+        data=df_combo_sets,
+        x="sampling", y="combo_set",
+        size="n_patients", hue="n_patients",
+        sizes=(50, 400),
+        edgecolor='grey',
+        palette=cmap,
+    )
+    f.ax.xaxis.grid(True, "minor", linewidth=.25)
+    f.ax.yaxis.grid(True, "minor", linewidth=.25)
+    f.despine(left=True, bottom=True)
+    f.tight_layout()
+    f.savefig("./scatter_combo_feat.png", dpi=320)
