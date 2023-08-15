@@ -1,3 +1,5 @@
+import numpy as np
+
 def categorize_age(age):
     if age < 30: 
         cat = '<30'
@@ -10,3 +12,9 @@ def categorize_age(age):
     else: 
         cat = '>90'
     return cat
+
+def common_member(l = []):
+    el = l[0]
+    for i, e in enumerate(l):
+        el = np.intersect1d(el, e)
+    return el

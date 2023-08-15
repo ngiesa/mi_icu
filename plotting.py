@@ -3,6 +3,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+from utils import common_member
 
 sns.set_theme(style="whitegrid")
 
@@ -20,7 +21,7 @@ def plot_frequency_lens(data_loader: DataLoader = None):
         ['{}h_index'.format(str(conf_items[item]["sampling_interval"]))]\
             .count() * conf_items[item]["sampling_interval"])\
                 .reset_index(name="seq_lens").assign(sampling=str(conf_items[item]["sampling_interval"]) + "h") for item in conf_items.keys()] + \
-                    [data_meas.groupby("subject_id").hours_in.count().reset_index(name="seq_lens").assign(sampling=str(1) + "h")]
+                    [data_meas.groupby("subject_id").hours_in.count().reset_index(name="seq_lens").assign(sampling="none")]
 
     df_plot = pd.concat(dfs_plotified).reset_index()
     fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
@@ -39,7 +40,7 @@ def plot_missing_rates_heatmap(data_loader: DataLoader = None, sampling_interval
     '''plot missing rates per sampling interval '''
 
     data = data_loader.data_meas
-    features = data_loader.features
+    features = data_loader.all_features
 
     df_plot = None
     for i, interv in enumerate(sampling_intervals):
@@ -66,10 +67,29 @@ def plot_missing_rates_heatmap(data_loader: DataLoader = None, sampling_interval
     # store figure
     fig.savefig("./missing_rates.png", dpi=340)
 
+# plot distributions from features in different sampled sets 
+def plot_scatter_resample_feats(data_loader: DataLoader = None):
+
+    ''' plotting scatter between features across resampled complete datasets '''
+
+    common_features, dfs_plot = [], [data_loader.data_meas.assign(sampling="none")]
+
+    for ds_key in data_loader.complete_datasets.keys():
+        df = data_loader.complete_datasets[ds_key]
+        dfs_plot.append(df.assign(sampling=df.columns[1][0]))
+
+    common_features = common_member([df.columns for df in dfs_plot])
+    df_plot = pd.concat(dfs_plot)[list(common_features)]
+
+    sns.pairplot(df_plot.drop(columns=["subject_id"]).reset_index(drop=True), kind="scatter", corner=True, hue="sampling", plot_kws={'alpha': 0.5})
+
+    plt.savefig("./scatter_corr_resampl.png", dpi=320)
 
 
 # scatterplot with number of feats, sampling interval and number of patients 
 def plot_scatter_feat_combo():
+
+    ''' plot size of feature sets per number of feature and per sampling interval  '''
 
     f, ax = plt.subplots(1,1,figsize=(12, 8))
 

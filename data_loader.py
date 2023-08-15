@@ -1,20 +1,30 @@
 import pandas as pd
 from utils import categorize_age
+import os
 
 class DataLoader():
 
     ''' class for handling mimic preprocessed file and derived complete case sets '''
 
-    def __init__(self, data_path:str = "", conf_items: dict = {}):
+    def __init__(self, data_path:str = "", conf_items: dict = {}, resample_feats: list = []):
         self.data_path = data_path
         self.data_meas, self.data_demo = self.load_mimic_hourly_data()
         self.conf_items = conf_items
-        self.features = list(self.data_meas\
+        self.all_features = list(self.data_meas\
                              .drop(columns=["hadm_id", "subject_id", "hours_in", "icustay_id"]).columns)
+        self.complete_datasets = self.load_complete_datasets()
+        
+    
+    def load_complete_datasets(self):
+        ''' load resampled complete datasets if available'''
+        complete_ds_names, ds = [f for f in os.listdir("./data") if not ".h5" in f], {}
+        for ds_name in complete_ds_names:
+            ds[ds_name.replace(".csv", "")] = pd.read_csv("./data/{}".format(ds_name), index_col=0)
+        return ds
+        
 
     def load_mimic_hourly_data(self):
         ''' load hourly measurements and static demogr data'''
-
         data_meas = pd.read_hdf(self.data_path, 'vitals_labs_mean')
         data_meas.columns = data_meas.columns.droplevel('Aggregation Function')
 

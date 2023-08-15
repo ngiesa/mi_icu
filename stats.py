@@ -37,7 +37,7 @@ def combine_features(data_loader:DataLoader=None, number_of_features:int=0, pati
             if interval_h == 1:
                 data = data_loader.data_meas
             else:
-                data = data_loader.resample_data(features=data_loader.features, interval_h=interval_h, drop_na=False)
+                data = data_loader.resample_data(features=data_loader.all_features, interval_h=interval_h, drop_na=False)
 
             for j, combo in enumerate(comb_feats):
 

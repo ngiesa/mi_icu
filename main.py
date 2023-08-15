@@ -1,7 +1,7 @@
 
 
 from data_loader import DataLoader
-from plotting import plot_frequency_lens, plot_missing_rates_heatmap, plot_scatter_feat_combo
+from plotting import plot_frequency_lens, plot_missing_rates_heatmap, plot_scatter_feat_combo, plot_scatter_resample_feats
 from stats import combine_features
 
 # example usage
@@ -29,7 +29,9 @@ data_loader = DataLoader(data_path=DATA_PATH)
 #plot_missing_rates_heatmap(data_loader=data_loader, sampling_intervals=[1, 2, 4, 6])
 
 #combine_features(data_loader=data_loader, number_of_features=8)
-plot_scatter_feat_combo()
+#plot_scatter_feat_combo()
+
+plot_scatter_resample_feats(data_loader=data_loader)
 
 data_loader.conf_items= conf_items
 data_loader.apply_conf_items()
