@@ -1,9 +1,146 @@
-# mi_icu
-Multiple imputation methods for icu data
+# Repository for "Benchmarking imputation methods on real-world clinical time series with simulated spatio-temporal missingness"
 
-This repository anapyses multiple imputation methods under MAR, MCAR assumptions in a complete icu dataset. 
+We provide code and instructions how to use our models. The MIMIC and HIRID datasets can be downloaded directly via physionet (https://physionet.org/content/hirid/1.1.1/, https://physionet.org/content/mimiciii/1.4/). ICDEP cannot be shared due to German privacy regulations but we aim to make an anonymous version available soon. Besides, complete case data and imputed datasets related to MIMIC are currently submitted to Physionet. 
 
-The preprocessed file from MIMIC-Extract was used namley all_hourly_data.h5, the file can be downloaded after granting Gloud Access thorugh Physionet via https://mimic.mit.edu/docs/gettingstarted/cloud/request/. 
 
-potential features from MIMIC Extract dataset:
-[ 'alanine aminotransferase', 'albumin', 'albumin ascites', 'albumin pleural', 'albumin urine', 'alkaline phosphate', 'anion gap', 'asparate aminotransferase', 'basophils', 'bicarbonate', 'bilirubin', 'blood urea nitrogen', 'co2', 'co2 (etco2, pco2, etc.)', 'calcium', 'calcium ionized', 'calcium urine', 'cardiac index', 'cardiac output thermodilution', 'cardiac output fick', 'central venous pressure', 'chloride', 'chloride urine', 'cholesterol', 'cholesterol hdl', 'cholesterol ldl', 'creatinine', 'creatinine ascites', 'creatinine body fluid', 'creatinine pleural', 'creatinine urine', 'diastolic blood pressure', 'eosinophils', 'fibrinogen', 'fraction inspired oxygen', 'fraction inspired oxygen set', 'glascow coma scale total', 'glucose', 'heart rate', 'height', 'hematocrit', 'hemoglobin', 'lactate', 'lactate dehydrogenase', 'lactate dehydrogenase pleural', 'lactic acid', 'lymphocytes', 'lymphocytes ascites', 'lymphocytes atypical', 'lymphocytes atypical csl', 'lymphocytes body fluid', 'lymphocytes percent', 'lymphocytes pleural', 'magnesium', 'mean blood pressure', 'mean corpuscular hemoglobin', 'mean corpuscular hemoglobin concentration', 'mean corpuscular volume', 'monocytes', 'monocytes csl', 'neutrophils', 'oxygen saturation', 'partial pressure of carbon dioxide', 'partial pressure of oxygen', 'partial thromboplastin time', 'peak inspiratory pressure', 'phosphate', 'phosphorous', 'plateau pressure', 'platelets', 'positive end-expiratory pressure', 'positive end-expiratory pressure set', 'post void residual', 'potassium', 'potassium serum', 'prothrombin time inr', 'prothrombin time pt', 'pulmonary artery pressure mean', 'pulmonary artery pressure systolic', 'pulmonary capillary wedge pressure', 'red blood cell count', 'red blood cell count csf', 'red blood cell count ascites', 'red blood cell count pleural', 'red blood cell count urine', 'respiratory rate', 'respiratory rate set', 'sodium', 'systemic vascular resistance', 'systolic blood pressure', 'temperature', 'tidal volume observed', 'tidal volume set', 'tidal volume spontaneous', 'total protein', 'total protein urine', 'troponin-i', 'troponin-t', 'venous pvo2', 'weight', 'white blood cell count', 'white blood cell count urine', 'ph', 'ph urine']
+---
+# For reference on model card metadata, see the spec: https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1
+# Doc / guide: https://huggingface.co/docs/hub/model-cards
+{{ card_data }}
+---
+
+# Model Card for Autoencoder Imputers
+
+<!-- Provide a quick summary of what the model is/does. -->
+
+A spatio-temporal autoencoder (STAE) is a type of deep learning model designed to learn compact representations of data that vary across both space and time. Its purpose is to capture spatial structures (e.g., relationships between features, pixels, or locations) together with temporal dynamics (e.g., evolution, trends, dependencies over time). Here, this model is used for imputations
+
+## Model Details
+
+### Model Description
+
+<!-- Provide a longer summary of what this model is. -->
+
+- **Developed by:** {Niklas Giesa}
+- **Funded by [optional]:** {Institute of Medical Informatics}
+- **Model type:** {LSTM / BILSTM STAE}
+- **License:** {cc}
+
+### Model Sources [optional]
+
+<!-- Provide the basic links for the model. -->
+
+- **Repository:** {(https://github.com/ngiesa/mi_icu)}
+
+## Uses
+
+Users who want to test a vaiation of imputation methods can use the models
+
+### Direct Use
+
+Imputations, apriori to downstream prediction tasks. 
+
+### Downstream Use [optional]
+
+<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
+
+Clinical prediction taks for death, or delirium 
+
+### Out-of-Scope Use
+
+Direct clinical decision making. 
+
+## Bias, Risks, and Limitations
+
+<!-- This section is meant to convey both technical and sociotechnical limitations. -->
+
+Sample size, selection bias, healthsystem properties. 
+
+### Recommendations
+
+Using benchmark on center-specific datasets and comparing results with benchmarks against our results. 
+
+## How to Get Started with the Model
+
+<code>
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.load_state_dict(torch.load("model.pth", map_location=device))
+model.to(device)
+</code>
+
+
+## Training Details
+
+### Training Data
+
+Cross validation (CV) sets dataset specific MIMIC, HIRID, ICDEP
+
+### Training Procedure
+
+Hyperband optimization via CV.
+
+#### Preprocessing [optional]
+
+Methods in main manuscript. 
+
+
+#### Training Hyperparameters
+
+Numer of hidden layers, accumulate graident batches (Batch of 1 due to unevenly sized sequences), number of stacked modules, preprocessing (GT, LOCF preimpute for training) etc. 
+
+## Evaluation
+
+
+### Testing Data, Factors & Metrics
+
+#### Testing Data
+
+Hold-out CV fold. 
+
+#### Factors
+
+Subsets of CV. 
+
+#### Metrics
+
+Cross-correlation and auto-correlation errors, RSME, MSE, Wasserstein distance 
+
+### Results
+
+Results in main manuscript. 
+
+#### Summary
+
+Summary in main manuscript. 
+
+## Model Examination [optional]
+
+
+## Environmental Impact
+
+<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
+
+Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) 
+
+Multiple trainings for approxamitely 167 hours on 5 GPUs as NVIDIA A100 Tensor Core, approx. 23.38 CO2 emitted. 
+
+## Technical Specifications
+
+### Model Architecture and Objective
+
+STAE, additional transformer model specified in https://www.nature.com/articles/s43856-024-00681-x. 
+
+### Compute Infrastructure / Hardware
+
+High Performance Cluster https://www.hpc.bihealth.org/
+
+
+#### Software
+
+VSCode, Pytorch environment
+
+
+## Model Card Contact
+
+niklas.giesa@charite.de
+
