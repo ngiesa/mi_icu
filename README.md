@@ -3,12 +3,6 @@
 We provide code and instructions how to use our models. The MIMIC and HIRID datasets can be downloaded directly via physionet (https://physionet.org/content/hirid/1.1.1/, https://physionet.org/content/mimiciii/1.4/). ICDEP cannot be shared due to German privacy regulations but we aim to make an anonymous version available soon. Besides, complete case data and imputed datasets related to MIMIC are currently submitted to Physionet. 
 
 
----
-# For reference on model card metadata, see the spec: https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1
-# Doc / guide: https://huggingface.co/docs/hub/model-cards
-{{ card_data }}
----
-
 # Model Card for Autoencoder Imputers
 
 <!-- Provide a quick summary of what the model is/does. -->
