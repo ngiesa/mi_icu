@@ -9,9 +9,9 @@ import statsmodels.stats.api as sms
 from static_variables import FEATURES
 
 # config parameters
-clean="drop"
+clean="pres"
 pattern="mcar"
-dataset = "mimic"
+dataset = "icdep"
 method_select = None
 boot=0
 mode = "" # "", baseline
@@ -20,17 +20,6 @@ direction = "" # or "", "rev"
     
 """ validate the imputation methods per single patient / sequence and over the whole population """
 
-# go through datasets and read complete data and methods 
-complete_data = pd.read_csv("./complete_sequences/sequence_{}_{}.csv".format(dataset.lower(), clean), index_col = 0) 
-complete_data = complete_data.assign(time_index = complete_data.groupby("sequence_id")["hr"].cumcount()).sort_values(by=["sequence_id", "time_index"])
-FILES_DATASET = os.listdir("./imputed_sequences/{}/".format(dataset.lower()))
-methods = [x.split("_")[0] for x in FILES_DATASET]
-
-# opening missing pattern for errors on imputed only or all
-induced_data = pd.read_csv("./induced_sequences/{}/missing_matrix_{}_boot_{}_{}_{}.csv"\
-    .format(dataset.lower(),dataset.lower(), boot, pattern, clean), index_col = 0)
-
-print("validating results for ", dataset)
 
 def root_mean_squared_error(a, b):
     """ personalized RMSE """
@@ -95,14 +84,14 @@ def get_cross_corr_divergence(series_complete, series_imputed):
             np.multiply(mask,pd.Series(ccd_imp).fillna(0))
         )
     
-def apply_metric_locally(metric, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, norm, f):
+def apply_metric_locally(metric, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, norm, f, normalize):
     """ apply any metric with norm to all missing values per sequence """
     return [metric(
                     #pd.Series(np.array(c[1][f]) * np.array(i[1][f].replace(0, float("NaN")))).dropna(), 
                     #pd.Series(np.array(p[1][f]) * np.array(i[1][f].replace(0, float("NaN")))).dropna(), 
                     pd.Series(np.array(c[1][f])), 
                     pd.Series(np.array(p[1][f])),
-                    ) / norm(c[1][f])
+                    ) / (norm(c[1][f]) if normalize else 1)
                     for c, p, i \
                     in zip(
                         df_cmpl_not_na.groupby("sequence_id"), 
@@ -110,7 +99,29 @@ def apply_metric_locally(metric, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, n
                         df_ind_not_na.groupby("sequence_id"),
                         )]
     
-def benchmark():
+def benchmark(
+    clean="pres",
+    pattern="mcar",
+    dataset = "icdep",
+    is_stae_baselines = False,
+    mode = "",
+    normalize = True
+    ):
+    
+    # go through datasets and read complete data and methods 
+    complete_data = pd.read_csv("./complete_sequences/sequence_{}_{}.csv".format(dataset.lower(), clean), index_col = 0) 
+    complete_data = complete_data.assign(time_index = complete_data.groupby("sequence_id")["hr"].cumcount()).sort_values(by=["sequence_id", "time_index"])
+    FILES_DATASET = os.listdir("./imputed_sequences/{}/".format(dataset.lower()))
+    if is_stae_baselines:
+        FILES_DATASET = os.listdir("../stae_baselines/{}/".format(dataset.lower()))
+    
+    methods = [x.split("_")[0] for x in FILES_DATASET]
+
+    # opening missing pattern for errors on imputed only or all
+    induced_data = pd.read_csv("./induced_sequences/{}/missing_matrix_{}_boot_{}_{}_{}.csv"\
+        .format(dataset.lower(),dataset.lower(), boot, pattern, clean), index_col = 0)
+
+    print("validating results for ", dataset)
     
     """ applying define constant variables for retrieving benchmarking statistcs """  
 
@@ -135,25 +146,41 @@ def benchmark():
         
         df_na_seq = df_test_induced.groupby(["sequence_id"])[FEATURES].sum().reset_index()
         df_na_seq.set_index("sequence_id")
-    
+            
         for method in list(set(methods)):
             
             print(method)
             
-            # TODO 
-            if method not in ["bilstaeloc","lstaeloc"]:
+            # TODO
+            if method not in ["lstae", "1locf", "linpol", "bilstaestat"]: #["BRITS", "SAITS", "stgae"]: #"CTA"
                 continue
             
             method_path = [f for f in files_dataset if (("cv_{}".format(CV) in f) and (f.split("_")[0] == method))]
+            if mode == "":
+                method_path = [m for m in method_path if not "baseline" in m]
             
             if len(method_path) == 0:
+                print("NO METHODS FOUND")
                 continue
             
-            print("open : ", "/home/giesan/mi_icu/spatio_temporal_pattern/imputed_sequences/{}/{}".format(dataset, method_path[0]))
+            print("open : ", method_path[0])
             
-            df_imputed = pd.read_csv("/home/giesan/mi_icu/spatio_temporal_pattern/imputed_sequences/{}/{}".format(dataset, method_path[0]), index_col=0)
+            if is_stae_baselines:
+                print("/home/giesan/mi_icu/stae_baselines/{}/{}".format(dataset, method_path[0]))
+                df_imputed = pd.read_csv("/home/giesan/mi_icu/stae_baselines/{}/{}".format(dataset, method_path[0]), index_col=0)
+            else:
+                df_imputed = pd.read_csv("/home/giesan/mi_icu/spatio_temporal_pattern/imputed_sequences/{}/{}".format(dataset, method_path[0]), index_col=0)
             df_imputed = df_imputed.assign(time_index = df_imputed.groupby("sequence_id")["hr"].cumcount())
 
+            #print(df_imputed)
+            
+            #print(df_test_complete)
+            
+            print(len(df_imputed))
+            print(len(df_test_complete))
+
+            assert len(df_imputed) == len(df_test_complete)
+            
             #ensure same sizes
             if len(df_imputed) != len(df_test_complete):
                 print("CV length adaption")
@@ -177,7 +204,7 @@ def benchmark():
                 # filter sequences with NaS for local na metrics
                 seq_na_feat = df_na_seq[df_na_seq[f] > 0]
                 
-                #print("remaining missings ", str(len(seq_na_feat)))
+                print("remaining missings ", seq_na_feat)
                 
                 # get feature series 
                 series_imp = df_imputed[f].reset_index(drop=True)
@@ -193,10 +220,15 @@ def benchmark():
                 
                 # calculation of global metrics the error terms are calculated across missing values only
                 #nrmse_all = root_mean_squared_error(series_cmpl, series_ind) / np.mean(series_cmpl)
-                nrmse_na = root_mean_squared_error(series_cmpl_na, series_imp_na) / np.mean(series_cmpl_na)
-                #nmae_all = mean_absolute_error(series_cmpl, series_ind) / np.mean(series_cmpl)
-                nmae_na = mean_absolute_error(series_cmpl_na, series_imp_na) / np.mean(series_cmpl_na)
-                nwsd_all = wasserstein_distance(series_cmpl, series_imp) / wsd_norm(series_cmpl)
+                if normalize:
+                    nrmse_na = root_mean_squared_error(series_cmpl_na, series_imp_na) / np.mean(series_cmpl_na)
+                    nmae_na = mean_absolute_error(series_cmpl_na, series_imp_na) / np.mean(series_cmpl_na)
+                    nwsd_all = wasserstein_distance(series_cmpl, series_imp) / wsd_norm(series_cmpl)
+                else:
+                    nrmse_na = root_mean_squared_error(series_cmpl_na, series_imp_na)
+                    nmae_na = mean_absolute_error(series_cmpl_na, series_imp_na)
+                    nwsd_all = wasserstein_distance(series_cmpl, series_imp)
+                    
                 
                 # appending global metrics
                 main_res_global.append(pd.DataFrame({"feature": f,
@@ -212,9 +244,9 @@ def benchmark():
                 df_imp_not_na = df_imputed.merge(seq_na_feat[["sequence_id"]], on="sequence_id") 
                 
                 # apply all metrics locally and get confidence intervals to 
-                nrmse_loc = apply_metric_locally(root_mean_squared_error, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, np.mean, f) 
-                nmae_loc = apply_metric_locally(mean_absolute_error, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, np.mean, f)
-                nwsd_loc = apply_metric_locally(wasserstein_distance, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, wsd_norm, f)
+                nrmse_loc = apply_metric_locally(root_mean_squared_error, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, np.mean, f, normalize) 
+                nmae_loc = apply_metric_locally(mean_absolute_error, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, np.mean, f, normalize)
+                nwsd_loc = apply_metric_locally(wasserstein_distance, df_cmpl_not_na, df_imp_not_na, df_ind_not_na, wsd_norm, f, normalize)
                 
                 assert len(nrmse_loc) == len(nmae_loc)
                 assert len(nmae_loc) == len(nwsd_loc)
@@ -265,10 +297,10 @@ def benchmark():
     df_display_seq.to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/seq_errors_{}_{}_{}_boot_{}_display_patterns_tmp.csv".format(dataset, pattern, clean + direction, boot))
     
     # write out the benchmarking results
-    pop_errors.to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/pop_errors_{}_{}_{}_boot_{}_{}_tmp.csv".format(dataset, pattern, clean + direction, boot, mode))
-    seq_errors.to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/seq_errors_{}_{}_{}_boot_{}_{}_tmp.csv".format(dataset, pattern, clean + direction, boot, mode))
+    pop_errors.to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/pop_errors_{}_{}_{}_boot_{}_{}_tmp_28_01_2026.csv".format(dataset, pattern, clean + direction, boot, mode))
+    seq_errors.to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/seq_errors_{}_{}_{}_boot_{}_{}_tmp_28_01_2026.csv".format(dataset, pattern, clean + direction, boot, mode))
     
     df_store = df_display_pop.merge(df_display_seq, suffixes=["_loc", "_glob"], on="method")
     print(df_store.head())
     df_store[["ACorD_loc","ACorWSD_loc","CCorD_loc","NMAE_loc","NRMSE_loc","NWSD_loc","NMAE_glob","NRMSE_glob","NWSD_glob"]]\
-        .to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/errors_{}_{}_{}_boot_{}_display_patterns_{}_tmp.csv".format(dataset, pattern, clean + direction, boot, mode))
+        .to_csv("/home/giesan/mi_icu/spatio_temporal_pattern/errors/patterns/errors_{}_{}_{}_boot_{}_display_patterns_{}_28_01_2026.csv".format(dataset, pattern, clean + direction, boot, mode))

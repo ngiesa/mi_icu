@@ -170,16 +170,8 @@ def mnar_condition(complete_value_ranges, dataset, all_miss_matrix, direction):
                 print(level)
                 mnar_miss = random.choice([0, 1], len(range_bin), p=[1-level, level])
                 range_bin[feature] = [max(r, m) for r, m in zip(range_bin[feature], mnar_miss)]
-                
-            #print(range_bin[[feature, feature + "_bin", "sequence_id", "time_index"]])
-                                    
+                                                    
             dfs_mnar_feat.append(range_bin[[feature, feature + "_bin", "sequence_id", "time_index"]])
-        
-        #print("ORIGINAL LEVELS")
-        #print(miss_ranges.groupby(feature + "_bin")[feature].mean())                    
-        
-        #print("ALTERED LEVELS")
-        #print(pd.concat(dfs_mnar_feat).groupby(feature + "_bin")[feature].mean())
         
         dfs_mnar_all.append(pd.concat(dfs_mnar_feat))
         
@@ -199,7 +191,7 @@ def assign_state_combined(df):
     
     return df.assign(state = df[FEATURES].astype(str).values.sum(axis=1))
 
-def assign_transitions_combined(df): #TODO OPTIMIZE
+def assign_transitions_combined(df):
     
     """ crating from and to transitions for matrix """
     
