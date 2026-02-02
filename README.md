@@ -1,38 +1,49 @@
 # mi_icu
 
-**Multiple imputation methods for ICU time series**
-
-This repository contains code to benchmark imputation methods on real-world ICU data using simulated spatio-temporal missingness patterns. It supports data from **MIMIC-III** and **HiRID**, both available via PhysioNet.
-
----
-
-## 📌 Model Card (Short)
+## Model Card (Short)
 
 - **Task:** Missing value imputation in multivariate clinical time series  
-- **Data:** ICU data from PhysioNet (MIMIC-III, HiRID)  
-- **Models:** Baseline statistical imputers and deep learning autoencoder-based methods  
+- **Data:** ICU data from PhysioNet (MIMIC‑III, HiRID)  
+- **Models:** Baseline statistical imputers and deep learning autoencoder‑based methods  
 - **Use case:** Controlled evaluation of imputation methods under realistic missingness patterns  
 
 ---
 
-## 📁 1. Data Loading
+## Table of Contents
 
-Raw ICU data must be downloaded manually from PhysioNet and stored locally. The data loader scripts expect a structured directory and convert raw events into aligned time-series per ICU stay.
+1. Introduction  
+2. Installation  
+3. Data Loading  
+4. Preprocessing Clinical Data  
+5. Creating Complete Case Data  
+6. Inducing Spatio‑Temporal Missingness  
+7. Imputation Methods  
+8. Using Stored Models and Applying Imputation  
+9. Example End‑to‑End Workflow  
+10. License & Citation  
 
-**Expected directory structure:**
+---
+
+## Introduction
+
+`mi_icu` is a benchmarking suite for missing data imputation on real‑world ICU time‑series data. It simulates clinically realistic **spatio‑temporal missingness patterns** by fitting a **Markov chain model** to fully observed ICU time series and then evaluates several imputation strategies ranging from statistical baselines to deep learning models.
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/ngiesa/mi_icu.git
+cd mi_icu
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
-data/
-├── mimiciii/
-│   ├── raw/
-│   └── processed/
-└── hirid/
-    ├── raw/
-    └── processed/
-```
 
-Loader scripts read from these directories and return unified pandas/NumPy time-series.
+---
 
-**Example:**
+## Data Loading
+
 ```python
 from data_loader import ICUDataLoader
 
@@ -42,111 +53,99 @@ loader = ICUDataLoader(
 )
 
 ts_data, meta = loader.load_all()
-print(ts_data.shape)
 ```
 
 ---
 
-## 🧹 2. Creation of Complete Case Data
+## Preprocessing Clinical Data
 
-To establish ground-truth data, *complete cases* are created by:
+```python
+from preprocess import resample_and_clean
 
-1. Removing ICU stays with missing values in required variables  
-2. Resampling time-series to a fixed temporal grid (e.g. 5 minutes)  
-3. Handling outliers using one of two strategies:
-   - **Discard:** remove samples containing outliers  
-   - **Clip:** cap values to predefined physiological bounds  
+clean_data = resample_and_clean(
+    ts_data,
+    resample_freq='5min',
+    outlier_strategy='clip'
+)
+```
 
-**Example:**
+---
+
+## Creating Complete Case Data
+
 ```python
 from preprocessing.complete_case import create_complete_cases
 
 complete_data = create_complete_cases(
     ts_data,
     resample_freq="5min",
-    outlier_strategy="clip"  # or "discard"
+    outlier_strategy="clip"
 )
-
-print(complete_data.shape)
 ```
 
 ---
 
-## 🌪️ 3. Induction of Missingness Patterns
+## Inducing Spatio‑Temporal Missingness
 
-Artificial missingness is introduced to simulate realistic ICU data corruption. The repository supports different **spatio-temporal patterns**, including:
+```python
+from induction import MissingnessInducer
 
-- **No Amplification:** reflecting spatio-temporal pattern without amplification of MAR / MNAR effects
-- **MAR Amplification:** reflecting spatio-temporal pattern with MAR effects
-- **MNAR Amplification:** reflecting spatio-temporal pattern with MNAR effects
+inducer = MissingnessInducer()
+mask = inducer.fit_sample(complete_data, pattern="mar_amplified")
+missing_data = apply_mask(complete_data, mask)
+```
 
-These patterns are applied only after complete case generation.
+---
 
-The script induction.py implements **missingness induction for ICU time series** using probabilistic state and transition models derived from fully observed data. It first computes **occurrence and transition probabilities** of missingness patterns per feature and per sequence, ensuring transitions are sequence-aware rather than global. Missingness can then be induced under **MCAR, MAR, or MNAR assumptions**, where MAR adjusts probabilities based on age groups and MNAR additionally conditions missingness on feature value ranges. The induction process samples an initial missingness state and iteratively samples subsequent states using conditioned transition matrices, preserving temporal dependence. For MNAR, missingness probabilities are further modified using value-dependent range factors before sampling. The final output is a bootstrapped, time-aligned missingness mask saved per dataset, pattern, and configuration.
+## Imputation Methods
 
+### Baseline
 
-## 🤖 4. Application of Imputation Methods
-
-### 4.1 Baseline Imputation Methods
-
-Standard statistical imputers serve as baselines.
-
-**Example (mean imputation):**
 ```python
 from sklearn.impute import SimpleImputer
 
-imputer = SimpleImputer(strategy="mean")
-imputed = imputer.fit_transform(masked_data)
+imp = SimpleImputer(strategy='mean')
+filled = imp.fit_transform(masked_data)
 ```
 
----
+### Deep Learning
 
-### 4.2 Deep Learning Imputation Models
-
-Deep learning models (e.g., GRU/LSTM autoencoders) learn temporal dependencies and feature correlations to recover missing values.
-
-**Example (STAE model):**
 ```python
 from imputation.stae import STAEImputer
 
 model = STAEImputer(input_dim=masked_data.shape[-1])
 model.fit(masked_data, complete_data)
-
-imputed_dl = model.impute(masked_data)
+imputed = model.impute(masked_data)
 ```
 
 ---
 
-## 🔁 Example End-to-End Workflow
+## Using Stored Models
+
+```python
+import torch
+
+model = STAEImputer(input_dim=num_features)
+model.load_state_dict(torch.load("models/stae_mimic.pth"))
+model.eval()
+
+imputed = model.impute(new_masked_data)
+```
+
+---
+
+## Example End‑to‑End Workflow
 
 ```bash
-# 1. Download ICU data from PhysioNet
-# 2. Store data under data/mimiciii or data/hirid
-
-# 3. Create complete cases
-python scripts/make_complete_cases.py
-
-# 4. Induce missingness
-python scripts/create_missingness.py --pattern block --rate 0.3
-
-# 5. Run imputation
-python scripts/run_imputation.py --method stae
+python preprocess.py
+python make_complete_cases.py
+python create_missingness.py
+python run_imputation.py
+python evaluate.py
 ```
 
 ---
 
-## 🛠️ Dependencies
+## License & Citation
 
-- Python ≥ 3.8  
-- numpy, pandas  
-- scikit-learn  
-- torch  
-
-Additional utilities are provided in `utils.py` and `stats.py`.
-
----
-
-## 📄 License & Citation
-
-This repository is intended for research and benchmarking.  
-Please cite the associated work when using this codebase.
+Please cite the associated publication by Giesa et al. when using this repository.
