@@ -76,26 +76,14 @@ print(complete_data.shape)
 
 Artificial missingness is introduced to simulate realistic ICU data corruption. The repository supports different **spatio-temporal patterns**, including:
 
-- **MCAR:** random missingness  
-- **Temporal blocks:** contiguous time segments removed  
-- **Feature-wise patterns:** correlated feature dropouts  
+- **No Amplification:** reflecting spatio-temporal pattern without amplification of MAR / MNAR effects
+- **MAR Amplification:** reflecting spatio-temporal pattern with MAR effects
+- **MNAR Amplification:** reflecting spatio-temporal pattern with MNAR effects
 
 These patterns are applied only after complete case generation.
 
-**Example:**
-```python
-from missingness import MissingnessGenerator
+The script induction.py implements **missingness induction for ICU time series** using probabilistic state and transition models derived from fully observed data. It first computes **occurrence and transition probabilities** of missingness patterns per feature and per sequence, ensuring transitions are sequence-aware rather than global. Missingness can then be induced under **MCAR, MAR, or MNAR assumptions**, where MAR adjusts probabilities based on age groups and MNAR additionally conditions missingness on feature value ranges. The induction process samples an initial missingness state and iteratively samples subsequent states using conditioned transition matrices, preserving temporal dependence. For MNAR, missingness probabilities are further modified using value-dependent range factors before sampling. The final output is a bootstrapped, time-aligned missingness mask saved per dataset, pattern, and configuration.
 
-generator = MissingnessGenerator(
-    pattern="block",
-    miss_rate=0.3,
-    temporal_span=12
-)
-
-masked_data = generator.apply(complete_data)
-```
-
----
 
 ## 🤖 4. Application of Imputation Methods
 
