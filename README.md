@@ -1,4 +1,4 @@
-# Repo for "Benchmarking imputation methods on real-world clinical time series with simulated spatio-temporal missingness"
+# Code repository for "Benchmarking imputation methods on real-world clinical time series with simulated spatio-temporal missingness"
 
 ## Model Card (Short)
 
