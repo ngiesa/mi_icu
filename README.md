@@ -1,4 +1,4 @@
-# mi_icu
+# Repo for "Benchmarking imputation methods on real-world clinical time series with simulated spatio-temporal missingness"
 
 ## Model Card (Short)
 
