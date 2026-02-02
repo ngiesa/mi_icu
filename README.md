@@ -1,140 +1,164 @@
-# Repository for "Benchmarking imputation methods on real-world clinical time series with simulated spatio-temporal missingness"
+# mi_icu
 
-We provide code and instructions how to use our models. The MIMIC and HIRID datasets can be downloaded directly via physionet (https://physionet.org/content/hirid/1.1.1/, https://physionet.org/content/mimiciii/1.4/). ICDEP cannot be shared due to German privacy regulations but we aim to make an anonymous version available soon. Besides, complete case data and imputed datasets related to MIMIC are currently submitted to Physionet. 
+**Multiple imputation methods for ICU time series**
 
+This repository contains code to benchmark imputation methods on real-world ICU data using simulated spatio-temporal missingness patterns. It supports data from **MIMIC-III** and **HiRID**, both available via PhysioNet.
 
-# Model Card for Autoencoder Imputers
+---
 
-<!-- Provide a quick summary of what the model is/does. -->
+## 📌 Model Card (Short)
 
-A spatio-temporal autoencoder (STAE) is a type of deep learning model designed to learn compact representations of data that vary across both space and time. Its purpose is to capture spatial structures (e.g., relationships between features, pixels, or locations) together with temporal dynamics (e.g., evolution, trends, dependencies over time). Here, this model is used for imputations
+- **Task:** Missing value imputation in multivariate clinical time series  
+- **Data:** ICU data from PhysioNet (MIMIC-III, HiRID)  
+- **Models:** Baseline statistical imputers and deep learning autoencoder-based methods  
+- **Use case:** Controlled evaluation of imputation methods under realistic missingness patterns  
 
-## Model Details
+---
 
-### Model Description
+## 📁 1. Data Loading
 
-<!-- Provide a longer summary of what this model is. -->
+Raw ICU data must be downloaded manually from PhysioNet and stored locally. The data loader scripts expect a structured directory and convert raw events into aligned time-series per ICU stay.
 
-- **Developed by:** {Niklas Giesa}
-- **Funded by [optional]:** {Institute of Medical Informatics}
-- **Model type:** {LSTM / BILSTM STAE}
-- **License:** {cc}
+**Expected directory structure:**
+```
+data/
+├── mimiciii/
+│   ├── raw/
+│   └── processed/
+└── hirid/
+    ├── raw/
+    └── processed/
+```
 
-### Model Sources [optional]
+Loader scripts read from these directories and return unified pandas/NumPy time-series.
 
-<!-- Provide the basic links for the model. -->
+**Example:**
+```python
+from data_loader import ICUDataLoader
 
-- **Repository:** {(https://github.com/ngiesa/mi_icu)}
+loader = ICUDataLoader(
+    mimic_path="data/mimiciii",
+    hirid_path="data/hirid"
+)
 
-## Uses
+ts_data, meta = loader.load_all()
+print(ts_data.shape)
+```
 
-Users who want to test a vaiation of imputation methods can use the models
+---
 
-### Direct Use
+## 🧹 2. Creation of Complete Case Data
 
-Imputations, apriori to downstream prediction tasks. 
+To establish ground-truth data, *complete cases* are created by:
 
-### Downstream Use [optional]
+1. Removing ICU stays with missing values in required variables  
+2. Resampling time-series to a fixed temporal grid (e.g. 5 minutes)  
+3. Handling outliers using one of two strategies:
+   - **Discard:** remove samples containing outliers  
+   - **Clip:** cap values to predefined physiological bounds  
 
-<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
+**Example:**
+```python
+from preprocessing.complete_case import create_complete_cases
 
-Clinical prediction taks for death, or delirium 
+complete_data = create_complete_cases(
+    ts_data,
+    resample_freq="5min",
+    outlier_strategy="clip"  # or "discard"
+)
 
-### Out-of-Scope Use
+print(complete_data.shape)
+```
 
-Direct clinical decision making. 
+---
 
-## Bias, Risks, and Limitations
+## 🌪️ 3. Induction of Missingness Patterns
 
-<!-- This section is meant to convey both technical and sociotechnical limitations. -->
+Artificial missingness is introduced to simulate realistic ICU data corruption. The repository supports different **spatio-temporal patterns**, including:
 
-Sample size, selection bias, healthsystem properties. 
+- **MCAR:** random missingness  
+- **Temporal blocks:** contiguous time segments removed  
+- **Feature-wise patterns:** correlated feature dropouts  
 
-### Recommendations
+These patterns are applied only after complete case generation.
 
-Using benchmark on center-specific datasets and comparing results with benchmarks against our results. 
+**Example:**
+```python
+from missingness import MissingnessGenerator
 
-## How to Get Started with the Model
+generator = MissingnessGenerator(
+    pattern="block",
+    miss_rate=0.3,
+    temporal_span=12
+)
 
-<code>
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.load_state_dict(torch.load("model.pth", map_location=device))
-model.to(device)
-</code>
+masked_data = generator.apply(complete_data)
+```
 
+---
 
-## Training Details
+## 🤖 4. Application of Imputation Methods
 
-### Training Data
+### 4.1 Baseline Imputation Methods
 
-Cross validation (CV) sets dataset specific MIMIC, HIRID, ICDEP
+Standard statistical imputers serve as baselines.
 
-### Training Procedure
+**Example (mean imputation):**
+```python
+from sklearn.impute import SimpleImputer
 
-Hyperband optimization via CV.
+imputer = SimpleImputer(strategy="mean")
+imputed = imputer.fit_transform(masked_data)
+```
 
-#### Preprocessing [optional]
+---
 
-Methods in main manuscript. 
+### 4.2 Deep Learning Imputation Models
 
+Deep learning models (e.g., GRU/LSTM autoencoders) learn temporal dependencies and feature correlations to recover missing values.
 
-#### Training Hyperparameters
+**Example (STAE model):**
+```python
+from imputation.stae import STAEImputer
 
-Numer of hidden layers, accumulate graident batches (Batch of 1 due to unevenly sized sequences), number of stacked modules, preprocessing (GT, LOCF preimpute for training) etc. 
+model = STAEImputer(input_dim=masked_data.shape[-1])
+model.fit(masked_data, complete_data)
 
-## Evaluation
+imputed_dl = model.impute(masked_data)
+```
 
+---
 
-### Testing Data, Factors & Metrics
+## 🔁 Example End-to-End Workflow
 
-#### Testing Data
+```bash
+# 1. Download ICU data from PhysioNet
+# 2. Store data under data/mimiciii or data/hirid
 
-Hold-out CV fold. 
+# 3. Create complete cases
+python scripts/make_complete_cases.py
 
-#### Factors
+# 4. Induce missingness
+python scripts/create_missingness.py --pattern block --rate 0.3
 
-Subsets of CV. 
+# 5. Run imputation
+python scripts/run_imputation.py --method stae
+```
 
-#### Metrics
+---
 
-Cross-correlation and auto-correlation errors, RSME, MSE, Wasserstein distance 
+## 🛠️ Dependencies
 
-### Results
+- Python ≥ 3.8  
+- numpy, pandas  
+- scikit-learn  
+- torch  
 
-Results in main manuscript. 
+Additional utilities are provided in `utils.py` and `stats.py`.
 
-#### Summary
+---
 
-Summary in main manuscript. 
+## 📄 License & Citation
 
-## Model Examination [optional]
-
-
-## Environmental Impact
-
-<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
-
-Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) 
-
-Multiple trainings for approxamitely 167 hours on 5 GPUs as NVIDIA A100 Tensor Core, approx. 23.38 CO2 emitted. 
-
-## Technical Specifications
-
-### Model Architecture and Objective
-
-STAE, additional transformer model specified in https://www.nature.com/articles/s43856-024-00681-x. 
-
-### Compute Infrastructure / Hardware
-
-High Performance Cluster https://www.hpc.bihealth.org/
-
-
-#### Software
-
-VSCode, Pytorch environment
-
-
-## Model Card Contact
-
-niklas.giesa@charite.de
-
+This repository is intended for research and benchmarking.  
+Please cite the associated work when using this codebase.
